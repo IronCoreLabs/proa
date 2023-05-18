@@ -1,0 +1,10 @@
+.direnv
+.dockerignore
+.envrc
+.github
+.gitignore
+*.md
+*.yaml
+Dockerfile
+flake.*
+target

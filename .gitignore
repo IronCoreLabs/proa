@@ -1,0 +1,6 @@
+/target/
+**/*.rs.bk
+.vscode
+cobertura.xml
+tarpaulin-report.html
+.direnv
