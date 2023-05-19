@@ -4,6 +4,7 @@ use tracing::{info, debug, warn};
 
 mod exec;
 mod k8s;
+mod stream;
 
 #[tokio::main]
 async fn main() -> ExitCode {

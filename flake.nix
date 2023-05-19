@@ -23,7 +23,7 @@
             src = ./.;
             cargoLock.lockFile = ./Cargo.lock;
             nativeBuildInputs = [ pkgs.pkg-config ];
-            buildInputs = [ rusttoolchain ]
+            buildInputs = [ rusttoolchain pkgs.openssl ]
               ++ pkgs.lib.optionals pkgs.stdenv.isDarwin
               [ pkgs.darwin.apple_sdk.frameworks.Security ];
           };
@@ -33,7 +33,7 @@
         # nix develop
         devShell = pkgs.mkShell {
           buildInputs = with pkgs;
-            [ rusttoolchain pkg-config skaffold kind ]
+            [ rusttoolchain pkg-config skaffold kind openssl ]
             ++ pkgs.lib.optionals pkgs.stdenv.isDarwin
             [ pkgs.darwin.apple_sdk.frameworks.Security ];
         };
