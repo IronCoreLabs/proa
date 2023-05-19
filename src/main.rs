@@ -1,11 +1,11 @@
 use std::process::ExitCode;
 
-use tracing::{info, debug, warn};
+use tracing::{debug, info, warn};
 
 mod exec;
 mod k8s;
-mod stream;
 mod shutdown;
+mod stream;
 
 #[tokio::main]
 async fn main() -> ExitCode {
@@ -18,7 +18,7 @@ async fn main() -> ExitCode {
         Err(error) => {
             warn!(?error);
             1
-        },
+        }
     };
     debug!(status, "Exiting.");
     status.into()
