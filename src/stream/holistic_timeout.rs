@@ -8,7 +8,9 @@ use core::task::{Context, Poll};
 use std::fmt;
 use std::time::Duration;
 
-/// Stream returned by the [`timeout`](super::StreamExt::timeout) method.
+/// Stream returned by the [`timeout`](super::HolisticStreamExt::holistic_timeout) method.
+/// Mostly a clone of `timeout` from tokio, we just don't reset the duration of the timeout on
+/// each iteration.
 #[must_use = "streams do nothing unless polled"]
 #[derive(Debug)]
 #[pin_project]
@@ -48,8 +50,6 @@ impl<S: Stream> Stream for HolisticTimeout<S> {
         match me.stream.poll_next(cx) {
             Poll::Ready(v) => {
                 if v.is_some() {
-                    // let next = Instant::now() + *me.duration;
-                    // me.deadline.reset(next);
                     *me.poll_deadline = true;
                 }
                 return Poll::Ready(v.map(Ok));
@@ -81,8 +81,6 @@ impl<S: Stream> Stream for HolisticTimeout<S> {
         (lower, twice_plus_one(upper))
     }
 }
-
-// ===== impl Elapsed =====
 
 impl Elapsed {
     pub(crate) fn new() -> Self {

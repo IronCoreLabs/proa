@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use anyhow::anyhow;
 use futures::StreamExt;
 use gethostname;
@@ -11,6 +13,8 @@ use kube::{
 };
 use kube::{Api, Client};
 use tracing::{debug, debug_span, info};
+
+use crate::stream::holistic_stream_ext::HolisticStreamExt;
 
 // Kubernetes-related functions.
 
@@ -31,13 +35,16 @@ pub async fn wait_for_ready() -> Result<Pod, anyhow::Error> {
     let watch_config = Config::default().fields(watch_config.as_str());
 
     let events = watcher(pods, watch_config).applied_objects();
-    let ready_pods = events.filter_map(filter_ready);
-    let mut ready_pods = Box::pin(ready_pods);
+    // TODO: just an example of use, I know you don't want it here
+    let ready_pods = events
+        .filter_map(filter_ready)
+        .holistic_timeout(Duration::new(10, 0));
+    tokio::pin!(ready_pods);
 
     let ready_pod = ready_pods
         .next()
         .await
-        .ok_or(anyhow!("Pod was never ready"))?;
+        .ok_or(anyhow!("Pod was never ready"))??;
     info!(myname, "Pod is ready");
     Ok(ready_pod)
 }
