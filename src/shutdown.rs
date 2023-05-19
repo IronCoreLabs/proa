@@ -1,12 +1,11 @@
-use anyhow::{anyhow, Error};
-use futures::stream::{once, select};
+use anyhow::Error;
 use futures::StreamExt;
 use k8s_openapi::api::core::v1::Pod;
 use std::time::Duration;
-use tokio::time::sleep;
 use tracing::{debug, debug_span, info};
 
 use crate::k8s;
+use crate::stream::holistic_stream_ext::HolisticStreamExt;
 
 pub async fn shutdown(pod: Pod) -> Result<(), Error> {
     let span = debug_span!("shutdown");
@@ -29,21 +28,20 @@ async fn wait_for_shutdown(pod: Pod) -> Result<(), Error> {
         _ => 30,
     };
     let timeout: Duration = Duration::new(timeout, 0);
-    let timeout = sleep(timeout);
-    let timeout = once(timeout);
-    let timeout = timeout.map(|_t| Err(anyhow!("timeout expired")));
 
-    let events = k8s::watch_my_pod().await?;
-
-    let timed_events = select(events, timeout);
-    let timed_events = timed_events.inspect(log_progress);
-    let timed_events = timed_events.filter_map(is_done);
-    tokio::pin!(timed_events);
-    timed_events.next().await;
+    let events = k8s::watch_my_pod()
+        .await?
+        .holistic_timeout(timeout)
+        .map(flatten_result)
+        .inspect(log_progress)
+        .filter_map(is_done);
+    tokio::pin!(events);
+    events.next().await;
 
     Ok(())
 }
 
+// Return a tuple of (running, total) to show how many of the pod's containers are still running.
 fn pod_status(pod: Pod) -> (Option<usize>, Option<usize>) {
     // How many containers are still running?
     let running: Option<usize> = pod
@@ -62,6 +60,8 @@ fn pod_status(pod: Pod) -> (Option<usize>, Option<usize>) {
     (running, total)
 }
 
+// Use in filter_map to identify the last event in the stream. That's either when all the containers have terminated except one
+// (which we assume is this one), or when an error occurs.
 async fn is_done(maybe_pod: Result<Pod, Error>) -> Option<Result<Pod, Error>> {
     match maybe_pod {
         Ok(pod) => {
@@ -76,6 +76,7 @@ async fn is_done(maybe_pod: Result<Pod, Error>) -> Option<Result<Pod, Error>> {
     }
 }
 
+// Emit a log message indicating the progress we've made toward shutting down the containers in this pod.
 fn log_progress(maybe_pod: &Result<Pod, Error>) {
     fn fmt_or_unknown(n: Option<usize>) -> String {
         n.map_or("<unknown>".to_string(), |n| format!("{}", n))
@@ -89,5 +90,18 @@ fn log_progress(maybe_pod: &Result<Pod, Error>) {
             debug!("{}/{} containers are still running.", running, total)
         }
         Err(err) => info!(?err),
+    }
+}
+
+// Flatten a nested Result into a simple Result.
+fn flatten_result<T, E1, E2, E3>(r: Result<Result<T, E1>, E2>) -> Result<T, E3>
+where
+    E1: Into<E3>,
+    E2: Into<E3>,
+{
+    match r {
+        Ok(Ok(t)) => Ok(t),
+        Ok(Err(e1)) => Err(e1.into()),
+        Err(e2) => Err(e2.into()),
     }
 }
