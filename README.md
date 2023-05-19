@@ -24,11 +24,15 @@ ready before the main process starts. We simulate a sidecar that starts slowly b
 Proa uses Kubernetes' knowledge about the readiness of the sidecar container. That means the sidecars must each provide a
 `readinessProbe`, and the Pod's `serviceAccount` needs permission to read and watch the Pod it's running in.
 
+TODO Support https://github.com/cargo-bins/cargo-binstall. Explain how to build the container image.
+
 ## Requirements
 
 - Sidecars need readinessProbes.
 - Service account needs permission to read and watch its own Pod.
-- Need to `shareProcessNamespace` so proa can stop the sidecars.
+- Need to `shareProcessNamespace` so proa can stop the sidecars, and either
+    - the main container with proa needs to run as UID 0 (not recommended)
+    - all containers need to run as the same UID.
 
 # Name
 

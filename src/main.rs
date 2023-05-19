@@ -5,6 +5,7 @@ use tracing::{info, debug, warn};
 mod exec;
 mod k8s;
 mod stream;
+mod shutdown;
 
 #[tokio::main]
 async fn main() -> ExitCode {
@@ -24,7 +25,13 @@ async fn main() -> ExitCode {
 }
 
 async fn inner_main() -> Result<u8, anyhow::Error> {
-    k8s::wait_for_ready().await?;
+    let pod = k8s::wait_for_ready().await?;
 
-    exec::run()
+    let result = exec::run();
+
+    if let Err(err) = shutdown::shutdown(pod).await {
+        warn!(?err, "Shutdown problem");
+    }
+
+    result
 }

@@ -1,12 +1,10 @@
-use std::time::Duration;
-
-use anyhow::anyhow;
-use futures::StreamExt;
+use anyhow::{anyhow, Error};
+use futures::{Stream, StreamExt, TryStreamExt};
 use gethostname;
 use k8s_openapi::api::core::v1::Pod;
 use kube::{
     runtime::{
-        watcher::{watcher, Config, Error},
+        watcher::{watcher, Config},
         WatchStreamExt,
     },
     ResourceExt,
@@ -21,7 +19,21 @@ use crate::stream::holistic_stream_ext::HolisticStreamExt;
 // Find the name of our own Pod, identify which container is ours, and watch all the other containers for readiness. Return when
 // they're ready, or return an error.
 #[tracing::instrument]
-pub async fn wait_for_ready() -> Result<Pod, anyhow::Error> {
+pub async fn wait_for_ready() -> Result<Pod, Error> {
+    let events = watch_my_pod().await?;
+    let ready_pods = events.filter_map(filter_ready);
+    let mut ready_pods = Box::pin(ready_pods);
+
+    let ready_pod = ready_pods
+        .next()
+        .await
+        .ok_or(anyhow!("Pod was never ready"))?;
+    info!("Pod is ready");
+    Ok(ready_pod)
+}
+
+// Return a stream providing Pod events about the pod we're running in.
+pub async fn watch_my_pod() -> Result<impl Stream<Item = Result<Pod, Error>>, Error> {
     let client = Client::try_default().await?;
     let pods: Api<Pod> = Api::default_namespaced(client);
 
@@ -34,19 +46,9 @@ pub async fn wait_for_ready() -> Result<Pod, anyhow::Error> {
     let watch_config = format!("metadata.name={}", myname);
     let watch_config = Config::default().fields(watch_config.as_str());
 
-    let events = watcher(pods, watch_config).applied_objects();
-    // TODO: just an example of use, I know you don't want it here
-    let ready_pods = events
-        .filter_map(filter_ready)
-        .holistic_timeout(Duration::new(10, 0));
-    tokio::pin!(ready_pods);
-
-    let ready_pod = ready_pods
-        .next()
-        .await
-        .ok_or(anyhow!("Pod was never ready"))??;
-    info!(myname, "Pod is ready");
-    Ok(ready_pod)
+    let pods = watcher(pods, watch_config).applied_objects();
+    let pods = pods.map_err(|e| anyhow!(e));
+    Ok(pods)
 }
 
 // If error, log it.
@@ -71,7 +73,7 @@ async fn filter_ready(pod: Result<Pod, Error>) -> Option<Pod> {
     }
 }
 
-fn is_ready(pod: &Pod) -> Result<bool, anyhow::Error> {
+fn is_ready(pod: &Pod) -> Result<bool, Error> {
     let span = debug_span!("is_ready");
     let _enter = span.enter();
 
