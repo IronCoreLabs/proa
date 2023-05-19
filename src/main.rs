@@ -5,6 +5,7 @@ use tracing::{debug, info, warn};
 mod exec;
 mod k8s;
 mod shutdown;
+mod stream;
 
 #[tokio::main]
 async fn main() -> ExitCode {

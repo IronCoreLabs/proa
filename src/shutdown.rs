@@ -76,7 +76,7 @@ async fn is_done(maybe_pod: Result<Pod, Error>) -> Option<Result<Pod, Error>> {
     }
 }
 
-fn log_progress(maybe_pod: &Result<Pod, Error>) -> () {
+fn log_progress(maybe_pod: &Result<Pod, Error>) {
     fn fmt_or_unknown(n: Option<usize>) -> String {
         n.map_or("<unknown>".to_string(), |n| format!("{}", n))
     }
