@@ -1,6 +1,5 @@
 use anyhow::{anyhow, Error};
 use futures::{Stream, StreamExt, TryStreamExt};
-use gethostname;
 use k8s_openapi::api::core::v1::Pod;
 use kube::{
     runtime::{
@@ -11,8 +10,6 @@ use kube::{
 };
 use kube::{Api, Client};
 use tracing::{debug, debug_span, info};
-
-use crate::stream::holistic_stream_ext::HolisticStreamExt;
 
 // Kubernetes-related functions.
 
@@ -89,14 +86,13 @@ fn is_ready(pod: &Pod) -> Result<bool, Error> {
     let status = &pod
         .status
         .as_ref()
-        .map(|s| {
+        .and_then(|s| {
             s.container_statuses.as_ref().map(|s| {
                 s.iter()
                     .filter(|s| &s.name != main_cont_name)
                     .all(|s| s.started.unwrap_or(false) && s.ready)
             })
         })
-        .flatten()
         .unwrap_or(false);
     debug!(status);
     Ok(*status)
