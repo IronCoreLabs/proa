@@ -28,7 +28,7 @@ async fn inner_main() -> Result<u8, anyhow::Error> {
 
     let result = exec::run();
 
-    if let Err(err) = shutdown::shutdown(pod) {
+    if let Err(err) = shutdown::shutdown(pod).await {
         warn!(?err, "Shutdown problem");
     }
 
