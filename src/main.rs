@@ -24,6 +24,7 @@ async fn main() -> ExitCode {
     status.into()
 }
 
+/// Convenience function so we can return a Result.
 async fn inner_main() -> Result<u8, anyhow::Error> {
     let pod = k8s::wait_for_ready().await?;
 

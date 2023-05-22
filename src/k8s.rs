@@ -13,8 +13,8 @@ use tracing::{debug, debug_span, info};
 
 // Kubernetes-related functions.
 
-// Find the name of our own Pod, identify which container is ours, and watch all the other containers for readiness. Return when
-// they're ready, or return an error.
+/// Find the name of our own Pod, identify which container is ours, and watch all the other containers for readiness. Return when
+/// they're ready, or return an error.
 #[tracing::instrument]
 pub async fn wait_for_ready() -> Result<Pod, Error> {
     let events = watch_my_pod().await?;
@@ -29,7 +29,7 @@ pub async fn wait_for_ready() -> Result<Pod, Error> {
     Ok(ready_pod)
 }
 
-// Return a stream providing Pod events about the pod we're running in.
+/// Return a stream providing Pod events about the pod we're running in.
 pub async fn watch_my_pod() -> Result<impl Stream<Item = Result<Pod, Error>>, Error> {
     let client = Client::try_default().await?;
     let pods: Api<Pod> = Api::default_namespaced(client);
@@ -48,9 +48,9 @@ pub async fn watch_my_pod() -> Result<impl Stream<Item = Result<Pod, Error>>, Er
     Ok(pods)
 }
 
-// If error, log it.
-// If all the pod's containers but this one are ready, return the pod.
-// Else return None.
+/// If error, log it.
+/// If all the pod's containers but this one are ready, return the pod.
+/// Else return None.
 async fn filter_ready(pod: Result<Pod, Error>) -> Option<Pod> {
     match pod {
         Err(e) => {
@@ -70,6 +70,8 @@ async fn filter_ready(pod: Result<Pod, Error>) -> Option<Pod> {
     }
 }
 
+/// Return true if this Pod is ready for the main process to start. That means all the containers except the main one are signaling
+/// ready status.
 fn is_ready(pod: &Pod) -> Result<bool, Error> {
     let span = debug_span!("is_ready");
     let _enter = span.enter();
@@ -83,6 +85,7 @@ fn is_ready(pod: &Pod) -> Result<bool, Error> {
         .get(0)
         .ok_or(anyhow!("No pod.spec.containers[0]"))?
         .name;
+
     let status = &pod
         .status
         .as_ref()

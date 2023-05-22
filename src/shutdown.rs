@@ -7,18 +7,19 @@ use tracing::{debug, debug_span, info};
 use crate::k8s;
 use crate::stream::holistic_stream_ext::HolisticStreamExt;
 
+/// Shut down the sidecars and wait for them to terminate.
 pub async fn shutdown(pod: Pod) -> Result<(), Error> {
     let span = debug_span!("shutdown");
     let _enter = span.enter();
 
-    // send_shutdown_reqs()?;
+    // TODO send_shutdown_reqs()?;
     wait_for_shutdown(pod).await?;
 
     Ok(())
 }
 
-// Log messages as the containers shut down.
-// If the timeout expires, give up and log a message.
+/// Log messages as the containers shut down.
+/// If the timeout expires, give up and log a message.
 async fn wait_for_shutdown(pod: Pod) -> Result<(), Error> {
     let timeout: Option<i64> = pod
         .spec
@@ -41,7 +42,7 @@ async fn wait_for_shutdown(pod: Pod) -> Result<(), Error> {
     Ok(())
 }
 
-// Return a tuple of (running, total) to show how many of the pod's containers are still running.
+/// Return a tuple of (running, total) to show how many of the pod's containers are still running.
 fn pod_status(pod: Pod) -> (Option<usize>, Option<usize>) {
     // How many containers are still running?
     let running: Option<usize> = pod
@@ -60,8 +61,8 @@ fn pod_status(pod: Pod) -> (Option<usize>, Option<usize>) {
     (running, total)
 }
 
-// Use in filter_map to identify the last event in the stream. That's either when all the containers have terminated except one
-// (which we assume is this one), or when an error occurs.
+/// Use in filter_map to identify the last event in the stream. That's either when all the containers have terminated except one
+/// (which we assume is this one), or when an error occurs.
 async fn is_done(maybe_pod: Result<Pod, Error>) -> Option<Result<Pod, Error>> {
     match maybe_pod {
         Ok(pod) => {
@@ -76,7 +77,7 @@ async fn is_done(maybe_pod: Result<Pod, Error>) -> Option<Result<Pod, Error>> {
     }
 }
 
-// Emit a log message indicating the progress we've made toward shutting down the containers in this pod.
+/// Emit a log message indicating the progress we've made toward shutting down the containers in this pod.
 fn log_progress(maybe_pod: &Result<Pod, Error>) {
     fn fmt_or_unknown(n: Option<usize>) -> String {
         n.map_or("<unknown>".to_string(), |n| format!("{}", n))
@@ -93,15 +94,12 @@ fn log_progress(maybe_pod: &Result<Pod, Error>) {
     }
 }
 
-// Flatten a nested Result into a simple Result.
-fn flatten_result<T, E1, E2, E3>(r: Result<Result<T, E1>, E2>) -> Result<T, E3>
+/// Flatten a nested Result into a simple Result.
+// https://github.com/rust-lang/rust/issues/70142
+fn flatten_result<T, E1, E2, E>(r: Result<Result<T, E1>, E2>) -> Result<T, E>
 where
-    E1: Into<E3>,
-    E2: Into<E3>,
+    E: From<E1>,
+    E: From<E2>,
 {
-    match r {
-        Ok(Ok(t)) => Ok(t),
-        Ok(Err(e1)) => Err(e1.into()),
-        Err(e2) => Err(e2.into()),
-    }
+    Ok(r??)
 }

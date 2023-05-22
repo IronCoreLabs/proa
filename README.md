@@ -12,7 +12,7 @@ Briefly, it does this:
 1. Wait until all containers (except its own) are ready.
 1. Start the main process and wait for it to exit.
 1. TODO Perform some shutdown actions, either the equivalent of `pkill` or hitting an HTTP endpoint on localhost.
-1. TODO Wait for the sidecars to exit.
+1. Wait for the sidecars to exit.
 
 Optional:
 - TODO Serve a readiness HTTP endpoint to indicate when the main process is running.
