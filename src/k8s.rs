@@ -17,6 +17,8 @@ use tracing::{debug, debug_span, info};
 /// they're ready, or return an error.
 #[tracing::instrument]
 pub async fn wait_for_ready() -> Result<Pod, Error> {
+    // TODO Get our Pod. If we're planning on using signals to terminate sidecars, assert that shareProcessNamespace == true and
+    // hostPID == false.
     let events = watch_my_pod().await?;
     let ready_pods = events.filter_map(filter_ready);
     let mut ready_pods = Box::pin(ready_pods);

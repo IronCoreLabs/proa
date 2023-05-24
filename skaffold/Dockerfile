@@ -5,6 +5,8 @@ FROM rust:1 AS chef
 RUN cargo install cargo-chef
 COPY rust-toolchain.toml /
 RUN rustup show
+# TODO If there's an update to the rust toolchain that's newer than the cached layer from the above command, then the RUN step
+# in the planner, below, will run slowly every time.
 WORKDIR /app
 
 FROM chef AS planner

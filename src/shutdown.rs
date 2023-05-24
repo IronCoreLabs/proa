@@ -1,8 +1,12 @@
 use anyhow::Error;
 use futures::StreamExt;
 use k8s_openapi::api::core::v1::Pod;
+use nix::sys::signal::{self, Signal};
+use nix::unistd::Pid;
+use std::ffi::OsStr;
 use std::time::Duration;
-use tracing::{debug, debug_span, info};
+use sysinfo::{PidExt, ProcessExt, System, SystemExt};
+use tracing::{debug, debug_span, info, trace};
 
 use crate::k8s;
 use crate::stream::holistic_stream_ext::HolisticStreamExt;
@@ -12,8 +16,40 @@ pub async fn shutdown(pod: Pod) -> Result<(), Error> {
     let span = debug_span!("shutdown");
     let _enter = span.enter();
 
-    // TODO send_shutdown_reqs()?;
+    send_shutdown_reqs()?;
     wait_for_shutdown(pod).await?;
+
+    Ok(())
+}
+
+/// Send requests for all the other containers in the Pod to shut down.
+fn send_shutdown_reqs() -> Result<(), Error> {
+    kill_all()?;
+
+    Ok(())
+}
+
+/// Send a TERM signal to every process that we can see, except our own.
+#[tracing::instrument]
+fn kill_all() -> Result<(), Error> {
+    debug!("Killing all visible processes.");
+    let mut sys = System::new();
+    sys.refresh_processes();
+    sys.processes()
+        .into_iter()
+        .filter(|&(_pid, process)| process.exe().file_name() != Some(OsStr::new("proa")))
+        .for_each(|(pid, process)| {
+            trace!("Killing PID {} ({})", pid, process.name());
+            let pid = pid.as_u32();
+            let pid = Pid::from_raw(pid.try_into().unwrap());
+            signal::kill(pid, Signal::SIGTERM)
+                .err()
+                .into_iter()
+                .map(|e| e.desc())
+                .for_each(|err| {
+                    info!(?err, "Unable to kill PID {} ({})", pid, process.name());
+                });
+        });
 
     Ok(())
 }

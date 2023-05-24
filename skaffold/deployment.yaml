@@ -51,6 +51,7 @@ spec:
           httpGet:
             port: 80
       serviceAccountName: proa
+      shareProcessNamespace: true
       terminationGracePeriodSeconds: 5
 
 ---
