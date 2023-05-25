@@ -7,4 +7,6 @@
 *.yaml
 Dockerfile
 flake.*
+skaffold
+skaffold.yaml
 target

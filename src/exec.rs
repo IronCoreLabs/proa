@@ -1,18 +1,16 @@
 use anyhow::Context;
-use std::env;
+use std::ffi::OsString;
 use std::os::unix::process::ExitStatusExt;
 use std::process::{Command, ExitStatus};
 use tracing::{debug_span, info};
 
 /// Run the main program. Pass its stdout and stderr through to the same places as ours. Capture its return status.
-pub fn run() -> Result<u8, anyhow::Error> {
+pub fn run(cmd: &OsString, args: &Vec<OsString>) -> Result<u8, anyhow::Error> {
     let span = debug_span!("run");
     let _enter = span.enter();
 
     // Build the command to run.
-    let mut args = env::args();
-    let _discard = args.next();
-    let mut cmd = Command::new(args.next().unwrap());
+    let mut cmd = Command::new(cmd);
     let cmd = cmd.args(args);
 
     // Run it and return the status.

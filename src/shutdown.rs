@@ -1,57 +1,138 @@
 use anyhow::Error;
-use futures::StreamExt;
+use clap::{crate_name, crate_version};
+use futures::future::join_all;
+use futures::{Future, FutureExt, StreamExt};
 use k8s_openapi::api::core::v1::Pod;
-use nix::sys::signal::{self, Signal};
-use nix::unistd::Pid;
-use std::ffi::OsStr;
+use reqwest::Client;
+use reqwest::{Method, Url};
 use std::time::Duration;
-use sysinfo::{PidExt, ProcessExt, System, SystemExt};
-use tracing::{debug, debug_span, info, trace};
+use tracing::{debug, debug_span, info, warn};
 
+use crate::config::Cli;
 use crate::k8s;
 use crate::stream::holistic_stream_ext::HolisticStreamExt;
 
 /// Shut down the sidecars and wait for them to terminate.
-pub async fn shutdown(pod: Pod) -> Result<(), Error> {
+pub async fn shutdown(cli: Cli, pod: Pod) -> Result<(), Error> {
     let span = debug_span!("shutdown");
     let _enter = span.enter();
 
-    send_shutdown_reqs()?;
+    send_shutdown_reqs(cli).await;
     wait_for_shutdown(pod).await?;
 
     Ok(())
 }
 
 /// Send requests for all the other containers in the Pod to shut down.
-fn send_shutdown_reqs() -> Result<(), Error> {
-    kill_all()?;
+async fn send_shutdown_reqs(cli: Cli) {
+    #[cfg(feature = "kill")]
+    let do_nothing = cli.shutdown_http_get.is_empty()
+        && cli.shutdown_http_post.is_empty()
+        && cli.kill.is_empty();
 
-    Ok(())
+    let user_agent = format!("{} v{}", crate_name!(), crate_version!());
+    let client = Client::builder().user_agent(user_agent).build();
+    match client {
+        Err(err) => warn!(
+            err = err.to_string(),
+            "Unable to build HTTP client; no HTTP shutdown requests will be sent."
+        ),
+        Ok(client) => send_http_shutdowns(&cli, &client).await,
+    }
+
+    #[cfg(feature = "kill")]
+    {
+        cli.kill.into_iter().for_each(kill::kill_by_name);
+
+        // If given no explicit shutdown instructions, just kill everything.
+        if do_nothing {
+            kill::kill_all();
+        }
+    }
 }
 
-/// Send a TERM signal to every process that we can see, except our own.
-#[tracing::instrument]
-fn kill_all() -> Result<(), Error> {
-    debug!("Killing all visible processes.");
-    let mut sys = System::new();
-    sys.refresh_processes();
-    sys.processes()
-        .into_iter()
-        .filter(|&(_pid, process)| process.exe().file_name() != Some(OsStr::new("proa")))
-        .for_each(|(pid, process)| {
-            trace!("Killing PID {} ({})", pid, process.name());
-            let pid = pid.as_u32();
-            let pid = Pid::from_raw(pid.try_into().unwrap());
-            signal::kill(pid, Signal::SIGTERM)
-                .err()
-                .into_iter()
-                .map(|e| e.desc())
-                .for_each(|err| {
-                    info!(?err, "Unable to kill PID {} ({})", pid, process.name());
-                });
-        });
+fn send_http_shutdowns(cli: &Cli, client: &Client) -> impl Future<Output = ()> {
+    let msgs = cli
+        .shutdown_http_get
+        .iter()
+        .map(|url| send_http(client, url.clone(), Method::GET));
+    let msgs = msgs.chain(
+        cli.shutdown_http_post
+            .iter()
+            .map(|url| send_http(client, url.clone(), Method::POST)),
+    );
+    join_all(msgs).map(|_| ())
+}
 
-    Ok(())
+/// Send an HTTP request. If it fails, log the failure.
+fn send_http(client: &Client, url: Url, method: Method) -> impl Future<Output = ()> {
+    let req = client.request(method.clone(), url.clone());
+    let resp = req.send();
+    let fut = resp
+        .map(|r: Result<_, _>| match r {
+            Ok(x) => x.error_for_status(),
+            Err(e) => Err(e),
+        })
+        .map(|r: Result<_, _>| r.err())
+        .then(|x: Option<reqwest::Error>| async move {
+            x.into_iter().for_each(|err| {
+                warn!(
+                    err = err.to_string(),
+                    url = url.to_string(),
+                    ?method,
+                    "Error sending shutdown request"
+                )
+            })
+        });
+    fut
+}
+
+#[cfg(feature = "kill")]
+mod kill {
+    use nix::{
+        sys::signal::{self, Signal},
+        unistd,
+    };
+    use std::ffi::{OsStr, OsString};
+    use sysinfo::{Pid, PidExt, Process, ProcessExt, System, SystemExt};
+    use tracing::{debug, info, trace};
+
+    /// Send a TERM signal to every process that we can see, except our own.
+    #[tracing::instrument]
+    pub fn kill_all() {
+        debug!("Killing all visible processes.");
+        let mut sys = System::new();
+        sys.refresh_processes();
+        sys.processes()
+            .into_iter()
+            .filter(|&(_pid, process)| process.exe().file_name() != Some(OsStr::new("proa")))
+            .for_each(|(pid, proc)| kill_one(pid, proc));
+    }
+
+    /// Find any processes running the named executable, and terminate them.
+    pub fn kill_by_name(pname: OsString) {
+        // TODO It's inefficient to create and refresh sys each time we're called.
+        let mut sys = System::new();
+        sys.refresh_processes();
+        sys.processes()
+            .into_iter()
+            .filter(|&(_pid, process)| process.exe().file_name() == Some(&pname))
+            .for_each(|(pid, proc)| kill_one(pid, proc));
+    }
+
+    /// Terminate one process by PID. Process is used for log messages.
+    fn kill_one(pid: &Pid, process: &Process) {
+        trace!("Killing PID {} ({})", pid, process.name());
+        let pid = pid.as_u32();
+        let pid = unistd::Pid::from_raw(pid.try_into().unwrap());
+        signal::kill(pid, Signal::SIGTERM)
+            .err()
+            .into_iter()
+            .map(|e| e.desc())
+            .for_each(|err| {
+                info!(?err, "Unable to kill PID {} ({})", pid, process.name());
+            });
+    }
 }
 
 /// Log messages as the containers shut down.

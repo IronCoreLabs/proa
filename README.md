@@ -11,11 +11,11 @@ Briefly, it does this:
 1. Watch its own Pod's spec and status.
 1. Wait until all containers (except its own) are ready.
 1. Start the main process and wait for it to exit.
-1. TODO Perform some shutdown actions, either the equivalent of `pkill` or hitting an HTTP endpoint on localhost.
+1. TODO Optionally serve a readiness HTTP endpoint to indicate when the main process is running.
+1. Perform some shutdown actions, hitting an HTTP endpoint on localhost or sending signals like `pkill` would.
 1. Wait for the sidecars to exit.
 
-Optional:
-- TODO Serve a readiness HTTP endpoint to indicate when the main process is running.
+If it encounters errors during shutdown, it logs each error, but it exits with the same exit code as the wrapped process.
 
 # Usage
 
@@ -30,6 +30,14 @@ TODO Support https://github.com/cargo-bins/cargo-binstall. Explain how to build 
 
 - Sidecars need readinessProbes.
 - Service account needs permission to read and watch its own Pod.
+
+## Killing
+
+Proa can kill the processes in your sidecars by sending SIGKILL, but it's probably not what you want. Most processes that receive
+SIGKILL will exit with status 143, or some other nonzero value. Kubernetes will interpret that as a container failure, and it will
+restart or recreate the Pod to try again.
+
+If you're sure you want to use this, compile the program with feature `kill`, and also make sure your Pod meets these requirements:
 - Need to `shareProcessNamespace` so proa can stop the sidecars, and either
     - the main container with proa needs to run as UID 0 (not recommended)
     - all containers need to run as the same UID.
