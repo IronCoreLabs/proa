@@ -8,5 +8,6 @@ build:
     docker:
       dockerfile: skaffold/Dockerfile
 manifests:
-  rawYaml:
-  - skaffold/deployment.yaml
+  kustomize:
+    paths:
+    - skaffold
