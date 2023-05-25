@@ -68,23 +68,21 @@ fn send_http_shutdowns(cli: &Cli, client: &Client) -> impl Future<Output = ()> {
 fn send_http(client: &Client, url: Url, method: Method) -> impl Future<Output = ()> {
     let req = client.request(method.clone(), url.clone());
     let resp = req.send();
-    let fut = resp
-        .map(|r: Result<_, _>| match r {
-            Ok(x) => x.error_for_status(),
-            Err(e) => Err(e),
+    resp.map(|r: Result<_, _>| match r {
+        Ok(x) => x.error_for_status(),
+        Err(e) => Err(e),
+    })
+    .map(|r: Result<_, _>| r.err())
+    .then(|x: Option<reqwest::Error>| async move {
+        x.into_iter().for_each(|err| {
+            warn!(
+                err = err.to_string(),
+                url = url.to_string(),
+                ?method,
+                "Error sending shutdown request"
+            )
         })
-        .map(|r: Result<_, _>| r.err())
-        .then(|x: Option<reqwest::Error>| async move {
-            x.into_iter().for_each(|err| {
-                warn!(
-                    err = err.to_string(),
-                    url = url.to_string(),
-                    ?method,
-                    "Error sending shutdown request"
-                )
-            })
-        });
-    fut
+    })
 }
 
 #[cfg(feature = "kill")]
