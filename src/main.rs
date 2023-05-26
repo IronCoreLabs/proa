@@ -21,7 +21,7 @@ async fn main() -> ExitCode {
     let status = match status {
         Ok(x) => x,
         Err(error) => {
-            warn!(?error);
+            warn!(error = error.to_string());
             1
         }
     };
@@ -36,7 +36,7 @@ async fn inner_main(cli: Cli) -> Result<u8, anyhow::Error> {
     let result = exec::run(&cli.command, &cli.args);
 
     if let Err(err) = shutdown::shutdown(cli, pod).await {
-        warn!(?err, "Shutdown problem");
+        warn!(err = err.to_string(), "Shutdown problem");
     }
 
     result

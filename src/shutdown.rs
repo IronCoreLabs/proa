@@ -126,9 +126,8 @@ mod kill {
         signal::kill(pid, Signal::SIGTERM)
             .err()
             .into_iter()
-            .map(|e| e.desc())
             .for_each(|err| {
-                info!(?err, "Unable to kill PID {} ({})", pid, process.name());
+                info!(err = err.desc(), "Unable to kill PID {} ({})", pid, process.name());
             });
     }
 }
@@ -205,7 +204,7 @@ fn log_progress(maybe_pod: &Result<Pod, Error>) {
             let total = fmt_or_unknown(total);
             debug!("{}/{} containers are still running.", running, total)
         }
-        Err(err) => info!(?err),
+        Err(err) => info!(err = err.to_string()),
     }
 }
 
