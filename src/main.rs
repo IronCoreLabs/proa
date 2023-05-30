@@ -14,7 +14,7 @@ mod stream;
 async fn main() -> ExitCode {
     let cli = Cli::parse();
 
-    tracing_subscriber::fmt::init();
+    tracing_subscriber::fmt().json().init();
     info!("Starting up.");
 
     let status = inner_main(cli).await;

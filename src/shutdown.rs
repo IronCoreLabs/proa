@@ -163,6 +163,8 @@ async fn wait_for_shutdown(pod: Pod) -> Result<(), Error> {
 
 /// Use in filter_map to identify the last event in the stream. That's either when all the containers have terminated except one
 /// (which we assume is this one), or when an error occurs.
+// We can't just use .status.phase, because that indicates the status of the entire Pod, and we're micro-managing based on statuses
+// of individual conatiners.
 async fn is_done(maybe_pod: Result<Pod, Error>) -> Option<Result<Pod, Error>> {
     match maybe_pod {
         Ok(pod) => {

@@ -2,45 +2,60 @@
 
 Inspired by https://github.com/redboxllc/scuttle, https://github.com/joho/godotenv, and
 https://github.com/kubernetes/enhancements/issues/753, among others.
-This program is meant to be the entrypoint for the "main" container in a Pod that also contains sidecar containers. This program
+This program is meant to be the entrypoint for the "main" container in a Pod that also contains sidecar containers. Proa
 is a wrapper around the main process in the main container. It waits for the sidecars to be ready before starting the main program,
-and it shuts down the sidecars when the main process exits so the whole Pod can exit gracefully, as in the case of a Job.
+and it shuts down the sidecars when the main process exits so the whole Pod can exit gracefully, as in the case of a
+[Job](https://kubernetes.io/docs/concepts/workloads/controllers/job/#handling-pod-and-container-failures).
 
 Briefly, it does this:
 
 1. Watch its own Pod's spec and status.
 1. Wait until all containers (except its own) are ready.
-1. Start the main process and wait for it to exit.
+1. Start the main (wrapped) process and wait for it to exit.
 1. TODO Optionally serve a readiness HTTP endpoint to indicate when the main process is running.
 1. Perform some shutdown actions, hitting an HTTP endpoint on localhost or sending signals like `pkill` would.
 1. Wait for the sidecars to exit.
 
 If it encounters errors during shutdown, it logs each error, but it exits with the same exit code as the wrapped process.
 
-# Usage
-
-See [example.yaml](example.yaml) for a demonstration of how to use it. The Job has a sidecar, simulated by nginx, that must be
-ready before the main process starts. We simulate a sidecar that starts slowly by making the nginx container run `sleep 30` first.
-Proa uses Kubernetes' knowledge about the readiness of the sidecar container. That means the sidecars must each provide a
-`readinessProbe`, and the Pod's `serviceAccount` needs permission to read and watch the Pod it's running in.
-
-TODO Support https://github.com/cargo-bins/cargo-binstall. Explain how to build the container image.
-
 ## Requirements
 
 - Sidecars need readinessProbes.
 - Service account needs permission to read and watch its own Pod.
 
+# Usage
+
+If you like, just copy [job.yaml](examples/job.yaml) and modify it for your use. The Job has a sidecar, simulated by a Python
+script, that must be ready before the main process starts. We simulate a sidecar that starts slowly by sleeping for 30 seconds
+before starting the Python HTTP server. Proa uses Kubernetes' knowledge about the readiness of the sidecar container. That means
+the sidecars must each provide a `readinessProbe`, and the Pod's `serviceAccount` needs permission to read and watch the Pod it's
+running in.
+
+Or if you prefer, follow this step-by-step guide:
+1. Build a container image that has both your main application and the `proa` executable. The easiest way to do this is probably
+    to use a multi-stage Dockerfile to compile `proa` and `COPY` it into your final image. See [Dockerfile](examples/Dockerfile)
+    for an example.
+1. Create a `ServiceAccount` for your Job to use.
+1. Create a `Role` and `RoleBinding` giving the service account permission to `get`, `watch`, and `list` the `pods` in its own
+    namespace.
+1. Modify the Job `spec.template.spec.serviceAccountName` to refer to that service account.
+1. Modify the Job and ensure that the `spec.template.spec.containers` entry for every sidecar has a `readinessProbe`. (It doesn't
+    matter if the main container has a readiness probe; proa will ignore it.)
+1. Optionally add a `RUST_LOG` environment variable to the main container to control proa's logging verbosity.
+
+TODO Support https://github.com/cargo-bins/cargo-binstall, to build the container image faster.
+
 ## Killing
 
-Proa can kill the processes in your sidecars by sending SIGKILL, but it's probably not what you want. Most processes that receive
-SIGKILL will exit with status 143, or some other nonzero value. Kubernetes will interpret that as a container failure, and it will
-restart or recreate the Pod to try again.
+When it's time to shut down, proa can end the processes in your sidecars by sending SIGTERM, but it's probably not what you want.
+Most processes that receive SIGTERM will exit with status 143, or some other nonzero value. Kubernetes will interpret that as a
+container failure, and it will restart or recreate the Pod to try again.
 
 If you're sure you want to use this, compile the program with feature `kill`, and also make sure your Pod meets these requirements:
 - Need to `shareProcessNamespace` so proa can stop the sidecars, and either
     - the main container with proa needs to run as UID 0 (not recommended)
     - all containers need to run as the same UID.
+- Don't use `hostPID`, or chaos will result as it tries to kill every process on the node.
 
 # Name
 
