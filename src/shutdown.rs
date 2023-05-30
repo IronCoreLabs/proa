@@ -17,6 +17,8 @@ pub async fn shutdown(cli: Cli, pod: Pod) -> Result<(), Error> {
     let span = debug_span!("shutdown");
     let _enter = span.enter();
 
+    info!("Sending shutdown requests.");
+
     send_shutdown_reqs(cli).await;
     wait_for_shutdown(pod).await?;
 

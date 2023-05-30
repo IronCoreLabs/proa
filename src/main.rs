@@ -2,7 +2,7 @@ use std::process::ExitCode;
 
 use clap::Parser;
 use config::Cli;
-use tracing::{debug, info, warn};
+use tracing::{info, warn};
 
 mod config;
 mod exec;
@@ -25,7 +25,7 @@ async fn main() -> ExitCode {
             1
         }
     };
-    debug!(status, "Exiting.");
+    info!(status, "Exiting.");
     status.into()
 }
 
