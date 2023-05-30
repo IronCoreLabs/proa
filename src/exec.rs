@@ -22,7 +22,7 @@ pub fn run(cmd: &OsString, args: &Vec<OsString>) -> Result<u8, anyhow::Error> {
         )
     })?;
 
-    info!(?cmd, status=status.code(), "Done running");
+    info!(?cmd, status = status.code(), "Done running");
     let status = exit_code(status);
     Ok(status)
 }
