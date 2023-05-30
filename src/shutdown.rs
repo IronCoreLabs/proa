@@ -127,7 +127,12 @@ mod kill {
             .err()
             .into_iter()
             .for_each(|err| {
-                info!(err = err.desc(), "Unable to kill PID {} ({})", pid, process.name());
+                info!(
+                    err = err.desc(),
+                    "Unable to kill PID {} ({})",
+                    pid,
+                    process.name()
+                );
             });
     }
 }
@@ -154,25 +159,6 @@ async fn wait_for_shutdown(pod: Pod) -> Result<(), Error> {
     events.next().await;
 
     Ok(())
-}
-
-/// Return a tuple of (running, total) to show how many of the pod's containers are still running.
-fn pod_status(pod: Pod) -> (Option<usize>, Option<usize>) {
-    // How many containers are still running?
-    let running: Option<usize> = pod
-        .status
-        .and_then(|pod_status| pod_status.container_statuses)
-        .map(|c_statuses| {
-            c_statuses
-                .into_iter()
-                .flat_map(|c_status| c_status.state.and_then(|c_state| c_state.running))
-                .count()
-        });
-
-    // How many containers are there total?
-    let total: Option<usize> = pod.spec.map(|s| s.containers.len());
-
-    (running, total)
 }
 
 /// Use in filter_map to identify the last event in the stream. That's either when all the containers have terminated except one
@@ -208,6 +194,25 @@ fn log_progress(maybe_pod: &Result<Pod, Error>) {
     }
 }
 
+/// Return a tuple of (running, total) to show how many of the pod's containers are still running.
+fn pod_status(pod: Pod) -> (Option<usize>, Option<usize>) {
+    // How many containers are still running?
+    let running: Option<usize> = pod
+        .status
+        .and_then(|pod_status| pod_status.container_statuses)
+        .map(|c_statuses| {
+            c_statuses
+                .into_iter()
+                .flat_map(|c_status| c_status.state.and_then(|c_state| c_state.running))
+                .count()
+        });
+
+    // How many containers are there total?
+    let total: Option<usize> = pod.spec.map(|s| s.containers.len());
+
+    (running, total)
+}
+
 /// Flatten a nested Result into a simple Result.
 // https://github.com/rust-lang/rust/issues/70142
 fn flatten_result<T, E1, E2, E>(r: Result<Result<T, E1>, E2>) -> Result<T, E>
@@ -216,4 +221,80 @@ where
     E: From<E2>,
 {
     Ok(r??)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use anyhow::anyhow;
+    use json::object;
+
+    #[tokio::test]
+    async fn test_is_done() -> Result<(), Error> {
+        // An error should be returned.
+        let result = Err(anyhow!("oops"));
+        let done = is_done(result).await;
+        assert!(done.is_some());
+
+        // A pod with one running container.
+        let pod = object! {
+            apiVersion: "v1",
+            kind: "Pod",
+            metadata: { name: "pod1" },
+            spec: {
+                containers: [{ name: "cont1" }]
+            },
+            status: {
+                containerStatuses: [ { name: "cont1", state: { running: { startedAt: "2020-02-02T20:20:02Z" } } } ]
+            }
+        };
+        let pod: Pod = serde_json::from_str(pod.dump().as_str())?;
+        let result = Ok(pod);
+        let done = is_done(result).await;
+        assert!(done.is_some());
+
+        // A pod with two running containers.
+        let pod = object! {
+            apiVersion: "v1",
+            kind: "Pod",
+            metadata: { name: "pod1" },
+            spec: {
+                containers: [
+                    { name: "cont1" },
+                    { name: "cont2" }
+                ]
+            },
+            status: {
+                containerStatuses: [ { name: "cont1", state: { running: { startedAt: "2020-02-02T20:20:02Z" } } } ],
+                containerStatuses: [ { name: "cont2", state: { running: { startedAt: "2020-02-20T02:02:20Z" } } } ]
+            }
+        };
+        let pod: Pod = serde_json::from_str(pod.dump().as_str())?;
+        let result = Ok(pod);
+        let done = is_done(result).await;
+        assert!(done.is_some());
+
+        // A pod with two containers, one running and one stopped.
+        let pod = object! {
+            apiVersion: "v1",
+            kind: "Pod",
+            metadata: { name: "pod1" },
+            spec: {
+                containers: [
+                    { name: "cont1" },
+                    { name: "cont2" }
+                ]
+            },
+            status: {
+                containerStatuses: [ { name: "cont1", state: { running: { startedAt: "2020-02-02T20:20:02Z" } } } ],
+                containerStatuses: [ { name: "cont2", state: { terminated: { finishedAt: "2020-02-20T02:02:20Z" } } } ]
+            }
+        };
+        let pod: Pod = serde_json::from_str(pod.dump().as_str())?;
+        let result = Ok(pod);
+        let done = is_done(result).await;
+        assert!(done.is_none());
+
+        Ok(())
+    }
 }

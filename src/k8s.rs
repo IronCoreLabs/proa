@@ -17,7 +17,7 @@ use tracing::{debug, debug_span, info};
 /// they're ready, or return an error.
 #[tracing::instrument]
 pub async fn wait_for_ready() -> Result<Pod, Error> {
-    // TODO Get our Pod. If we're planning on using signals to terminate sidecars, assert that shareProcessNamespace == true and
+    // TODO If we're planning on using signals to terminate sidecars, assert that shareProcessNamespace == true and
     // hostPID == false.
     let events = watch_my_pod().await?;
     let ready_pods = events.filter_map(filter_ready);
@@ -78,7 +78,7 @@ fn is_ready(pod: &Pod) -> Result<bool, Error> {
     let span = debug_span!("is_ready");
     let _enter = span.enter();
 
-    // The name of the main container in the Pod.
+    // The name of the main container in the Pod. For now we pick containers[0].
     let main_cont_name = &pod
         .spec
         .as_ref()
@@ -95,10 +95,143 @@ fn is_ready(pod: &Pod) -> Result<bool, Error> {
             s.container_statuses.as_ref().map(|s| {
                 s.iter()
                     .filter(|s| &s.name != main_cont_name)
-                    .all(|s| s.started.unwrap_or(false) && s.ready)
+                    .all(|s| s.ready)
             })
         })
         .unwrap_or(false);
     debug!(status);
     Ok(*status)
+}
+
+#[cfg(test)]
+mod tests {
+    use json::object;
+
+    use super::*;
+
+    #[tokio::test]
+    async fn check_ready() -> Result<(), Error> {
+        // Pass in an error, it's not ready.
+        assert_eq!(filter_ready(Err(anyhow!["foo"])).await, None);
+
+        // A pod where only the main container is ready.
+        let pod = object! {
+            apiVersion: "v1",
+            kind: "Pod",
+            metadata: { name: "pod1" },
+            spec: {
+                containers: [{ name: "cont1" }]
+            },
+            status: {
+                containerStatuses: [{ name: "cont1", ready: true }]
+            }
+        };
+        let pod: Pod = serde_json::from_str(pod.dump().as_str())?;
+        assert_eq!(filter_ready(Ok(pod.clone())).await, Some(pod));
+
+        // A pod with only the main container, which isn't ready.
+        let pod = object! {
+            apiVersion: "v1",
+            kind: "Pod",
+            metadata: { name: "pod1" },
+            spec: {
+                containers: [{ name: "cont1" }]
+            },
+            status: {
+                containerStatuses: [{ name: "cont1", ready: false }]
+            }
+        };
+        let pod: Pod = serde_json::from_str(pod.dump().as_str())?;
+        assert_eq!(filter_ready(Ok(pod.clone())).await, Some(pod));
+
+        // A pod with one ready sidecar.
+        let pod = object! {
+            apiVersion: "v1",
+            kind: "Pod",
+            metadata: { name: "pod1" },
+            spec: {
+                containers: [
+                    { name: "cont1" },
+                    { name: "cont2" },
+                ]
+            },
+            status: {
+                containerStatuses: [
+                    { name: "cont1", ready: true },
+                    { name: "cont2", ready: true },
+                ]
+            }
+        };
+        let pod: Pod = serde_json::from_str(pod.dump().as_str())?;
+        assert_eq!(filter_ready(Ok(pod.clone())).await, Some(pod));
+
+        // A pod with one not-ready sidecar.
+        let pod = object! {
+            apiVersion: "v1",
+            kind: "Pod",
+            metadata: { name: "pod1" },
+            spec: {
+                containers: [
+                    { name: "cont1" },
+                    { name: "cont2" },
+                ]
+            },
+            status: {
+                containerStatuses: [
+                    { name: "cont1", ready: true },
+                    { name: "cont2", ready: false },
+                ]
+            }
+        };
+        let pod: Pod = serde_json::from_str(pod.dump().as_str())?;
+        assert_eq!(filter_ready(Ok(pod.clone())).await, None);
+
+        // A pod with one ready sidecar, one not-ready.
+        let pod = object! {
+            apiVersion: "v1",
+            kind: "Pod",
+            metadata: { name: "pod1" },
+            spec: {
+                containers: [
+                    { name: "cont1" },
+                    { name: "cont2" },
+                    { name: "cont3" },
+                ]
+            },
+            status: {
+                containerStatuses: [
+                    { name: "cont1", ready: true },
+                    { name: "cont2", ready: true },
+                    { name: "cont3", ready: false },
+                ]
+            }
+        };
+        let pod: Pod = serde_json::from_str(pod.dump().as_str())?;
+        assert_eq!(filter_ready(Ok(pod.clone())).await, None);
+
+        // A pod with two ready sidecars.
+        let pod = object! {
+            apiVersion: "v1",
+            kind: "Pod",
+            metadata: { name: "pod1" },
+            spec: {
+                containers: [
+                    { name: "cont1" },
+                    { name: "cont2" },
+                    { name: "cont3" },
+                ]
+            },
+            status: {
+                containerStatuses: [
+                    { name: "cont1", ready: true },
+                    { name: "cont2", ready: true },
+                    { name: "cont3", ready: true },
+                ]
+            }
+        };
+        let pod: Pod = serde_json::from_str(pod.dump().as_str())?;
+        assert_eq!(filter_ready(Ok(pod.clone())).await, Some(pod));
+
+        Ok(())
+    }
 }

@@ -1,6 +1,5 @@
 use anyhow::Context;
 use std::ffi::OsString;
-use std::os::unix::process::ExitStatusExt;
 use std::process::{Command, ExitStatus};
 use tracing::{debug_span, info};
 
@@ -30,10 +29,63 @@ pub fn run(cmd: &OsString, args: &Vec<OsString>) -> Result<u8, anyhow::Error> {
 
 /// Convert ExitStatus to a u8 that we can use as our own exit status.
 fn exit_code(status: ExitStatus) -> u8 {
-    let c = status.into_raw();
+    let c = status.code();
     match c {
-        0 => 0,
-        1..=255 => c.try_into().unwrap(),
+        Some(0) => 0,
+        Some(n @ 1..=255) => n.try_into().unwrap(),
         _ => 1,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use anyhow::Error;
+
+    use super::*;
+
+    #[test]
+    fn run_exit_codes() -> Result<(), Error> {
+        #[derive(Debug)]
+        struct TestCase<'a> {
+            name: &'a str,
+            cmd: &'a str,
+            args: Vec<&'a str>,
+            stat: u8,
+        }
+
+        let tests = [
+            TestCase {
+                name: "simple",
+                cmd: "true",
+                args: vec![],
+                stat: 0,
+            },
+            TestCase {
+                name: "error",
+                cmd: "false",
+                args: vec![],
+                stat: 1,
+            },
+            TestCase {
+                name: "error 5",
+                cmd: "sh",
+                args: vec!["-c", "exit 5"],
+                stat: 5,
+            },
+            TestCase {
+                name: "non-u8 err",
+                cmd: "sh",
+                args: vec!["-c", "exit 257"],
+                stat: 1,
+            },
+        ];
+
+        for tc in tests {
+            let args = tc.args.into_iter().map(|x| x.into()).collect();
+            let exit_status = run(&tc.cmd.into(), &args)?;
+            assert_eq!(exit_status, tc.stat, "{}", tc.name);
+        }
+
+        Ok(())
     }
 }
