@@ -28,10 +28,28 @@ pub async fn shutdown(cli: Cli, pod: Pod) -> Result<(), Error> {
 /// Send requests for all the other containers in the Pod to shut down.
 async fn send_shutdown_reqs(cli: Cli) {
     #[cfg(feature = "kill")]
+    send_shutdown_with_kill(cli).await;
+    #[cfg(not(feature = "kill"))]
+    send_shutdown_normal(&cli).await;
+}
+
+#[cfg(feature = "kill")]
+async fn send_shutdown_with_kill(cli: Cli) {
     let do_nothing = cli.shutdown_http_get.is_empty()
         && cli.shutdown_http_post.is_empty()
         && cli.kill.is_empty();
 
+    send_shutdown_normal(&cli).await;
+
+    cli.kill.into_iter().for_each(kill::kill_by_name);
+
+    // If given no explicit shutdown instructions, just kill everything.
+    if do_nothing {
+        kill::kill_all();
+    }
+}
+
+async fn send_shutdown_normal(cli: &Cli) {
     let user_agent = format!("{} v{}", crate_name!(), crate_version!());
     let client = Client::builder().user_agent(user_agent).build();
     match client {
@@ -40,16 +58,6 @@ async fn send_shutdown_reqs(cli: Cli) {
             "Unable to build HTTP client; no HTTP shutdown requests will be sent."
         ),
         Ok(client) => send_http_shutdowns(&cli, &client).await,
-    }
-
-    #[cfg(feature = "kill")]
-    {
-        cli.kill.into_iter().for_each(kill::kill_by_name);
-
-        // If given no explicit shutdown instructions, just kill everything.
-        if do_nothing {
-            kill::kill_all();
-        }
     }
 }
 
