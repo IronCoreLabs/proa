@@ -57,7 +57,7 @@ async fn send_shutdown_normal(cli: &Cli) {
             err = err.to_string(),
             "Unable to build HTTP client; no HTTP shutdown requests will be sent."
         ),
-        Ok(client) => send_http_shutdowns(&cli, &client).await,
+        Ok(client) => send_http_shutdowns(cli, &client).await,
     }
 }
 
