@@ -3,7 +3,7 @@ use futures::{Stream, StreamExt, TryStreamExt};
 use k8s_openapi::api::core::v1::Pod;
 use kube::{
     runtime::{
-        watcher::{watcher, Config},
+        watcher::{watcher, Config as KubeConfig},
         WatchStreamExt,
     },
     ResourceExt,
@@ -37,13 +37,14 @@ pub async fn watch_my_pod() -> Result<impl Stream<Item = Result<Pod, Error>>, Er
     let pods: Api<Pod> = Api::default_namespaced(client);
 
     // Our Pod name is the same as our hostname.
-    // TODO Strip domain parts off in case setHostnameAsFQDN is set.
     let myname = gethostname::gethostname();
     let myname = myname.into_string().unwrap();
+    // Strip domain parts off in case setHostnameAsFQDN is set.
+    let myname = myname.split('.').next().unwrap();
     info!(myname, "Watching for Pod");
 
     let watch_config = format!("metadata.name={}", myname);
-    let watch_config = Config::default().fields(watch_config.as_str());
+    let watch_config = KubeConfig::default().fields(watch_config.as_str());
 
     let pods = watcher(pods, watch_config).applied_objects();
     let pods = pods.map_err(|e| anyhow!(e));

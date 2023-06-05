@@ -12,7 +12,6 @@ Briefly, it does this:
 1. Watch its own Pod's spec and status.
 1. Wait until all containers (except its own) are ready.
 1. Start the main (wrapped) process and wait for it to exit.
-1. TODO Optionally serve a readiness HTTP endpoint to indicate when the main process is running.
 1. Perform some shutdown actions, hitting an HTTP endpoint on localhost or sending signals like `pkill` would.
 1. Wait for the sidecars to exit.
 
@@ -41,9 +40,11 @@ Or if you prefer, follow this step-by-step guide:
 1. Modify the Job `spec.template.spec.serviceAccountName` to refer to that service account.
 1. Modify the Job and ensure that the `spec.template.spec.containers` entry for every sidecar has a `readinessProbe`. (It doesn't
     matter if the main container has a readiness probe; proa will ignore it.)
+1. Change the entrypoint (`command` and/or `args`) of the main container to call proa.
+    - Pass flags to tell proa how to shut down your sidecars. This will usually be `--shutdown-http-get=URL` or
+        `--shutdown-http-post=URL`. Those flags can be repeated multiple times.
+    - Pass the separator string `--`, followed by the path to the main program and all its arguments.
 1. Optionally add a `RUST_LOG` environment variable to the main container to control proa's logging verbosity.
-
-TODO Support https://github.com/cargo-bins/cargo-binstall, to build the container image faster.
 
 ## Killing
 

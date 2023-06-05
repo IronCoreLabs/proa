@@ -111,7 +111,7 @@ mod kill {
 
     /// Find any processes running the named executable, and terminate them.
     pub fn kill_by_name(pname: OsString) {
-        // TODO It's inefficient to create and refresh sys each time we're called.
+        // It's inefficient to create and refresh sys each time this function is called.
         let mut sys = System::new();
         sys.refresh_processes();
         sys.processes()
@@ -147,7 +147,10 @@ async fn wait_for_shutdown(pod: Pod) -> Result<(), Error> {
         .and_then(|spec| spec.termination_grace_period_seconds);
     let timeout: u64 = match timeout {
         Some(x @ 0..) => x.try_into().unwrap(),
-        _ => 30,
+        _ => {
+            debug!("Defaulting to 30 seconds");
+            30
+        }
     };
     let timeout: Duration = Duration::new(timeout, 0);
 
@@ -158,7 +161,9 @@ async fn wait_for_shutdown(pod: Pod) -> Result<(), Error> {
         .inspect(log_progress)
         .filter_map(is_done);
     tokio::pin!(events);
-    events.next().await;
+    if let Some(Err(err)) = events.next().await {
+        info!(err = err.to_string(), "Error waiting for sidecars to exit");
+    }
 
     Ok(())
 }

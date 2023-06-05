@@ -31,8 +31,7 @@ pub fn run(cmd: &OsString, args: &Vec<OsString>) -> Result<u8, anyhow::Error> {
 fn exit_code(status: ExitStatus) -> u8 {
     let c = status.code();
     match c {
-        Some(0) => 0,
-        Some(n @ 1..=255) => n.try_into().unwrap(),
+        Some(n @ 0..=255) => n.try_into().unwrap(),
         _ => 1,
     }
 }
