@@ -1,0 +1,119 @@
+# This ConfigMap contains the script for our notional sidecar, written in Python. On startup, it:
+# - sleeps for 30 seconds
+# - starts an HTTP server that always returns 200
+# - listens for a GET to /shutdown and terminates itself when it receives it.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sidecar
+data:
+  sidecar.py: |
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+    import time
+    from threading import Thread
+
+    class Sidecar(BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(200)
+            self.send_header("Content-type", "text/plain")
+            self.end_headers()
+            if self.path == "/shutdown":
+                print("Received /shutdown; shutting down.")
+                self.wfile.write(bytes("Shutting down.", "utf-8"))
+                self.wfile.flush()
+                shutdownThread = Thread()
+                shutdownThread.run = lambda: self.server.shutdown()
+                shutdownThread.start()
+            else:
+                self.wfile.write(bytes("We're running.", "utf-8"))
+
+    print("Sleeping to simulate a slow sidecar startup.")
+    time.sleep(30)
+    print("Starting the sidecar.")
+    server = HTTPServer(("0.0.0.0", 8080), Sidecar)
+    server.serve_forever()
+
+---
+
+# The Job with sidecar.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: proa
+spec:
+  template:
+    spec:
+      containers:
+      # This is the main container. It needs to wait until the sidecars have started before it begins executing the wrapped
+      # process. After the wrapped process exits, this container needs to shut down the sidecars.
+      - name: main
+        # Replace this with the image containing your application, plus the proa executable.
+        image: some-image-with-both-proa-and-your-application
+        # The proa executable comes first, followed by flags to control its behavior, followed by the "--" separator, and finally
+        # the wrapped program's name and arguments.
+        command:
+        - proa
+        - --shutdown-http-get=http://localhost:8080/shutdown
+        - --
+        - curl
+        - -sSf
+        - http://localhost:8080/
+        # RUST_LOG is optional; the default is info.
+        env:
+        - name: RUST_LOG
+          value: proa=info
+      # This is a sidecar container. It might take a while to start up and be ready. It needs a way to trigger it to exit.
+      - name: sidecar-1
+        image: python:3
+        command:
+        - python
+        - -u
+        - /script/sidecar.py
+        # The readiness probe indicates when this sidecar is ready to work with the main process in the main container.
+        readinessProbe:
+          httpGet:
+            port: 8080
+        volumeMounts:
+        - mountPath: /script
+          name: sidecar
+      # This service account needs permission to read this Pod.
+      serviceAccountName: proa
+      volumes:
+      - name: sidecar
+        configMap:
+          name: sidecar
+
+---
+
+# This service account exists in order to grant Kubernetes permissions that are used by proa.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: proa
+
+---
+
+# Grant permission to read all Pods in this namespace. There's no way to make these permissions more granular.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: proa
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "watch", "list"]
+
+---
+
+# Grant the permissions to the service account.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: proa
+subjects:
+- kind: ServiceAccount
+  name: proa
+roleRef:
+  kind: Role
+  name: proa
+  apiGroup: rbac.authorization.k8s.io

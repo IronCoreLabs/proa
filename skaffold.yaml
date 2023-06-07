@@ -1,0 +1,13 @@
+apiVersion: skaffold/v4beta5
+kind: Config
+metadata:
+  name: proa
+build:
+  artifacts:
+  - image: proa
+    docker:
+      dockerfile: skaffold/Dockerfile
+manifests:
+  kustomize:
+    paths:
+    - skaffold

@@ -1,0 +1,74 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: proa
+spec:
+  selector:
+    matchLabels:
+      app: proa
+  template:
+    metadata:
+      labels:
+        app: proa
+    spec:
+      containers:
+      - name: main
+        image: proa
+        args:
+        - --shutdown-http-get=http://localhost:8080/shutdown
+        - sleep
+        - "60"
+        env:
+        - name: RUST_LOG
+          value: proa=debug
+      - name: sidecar-1
+        image: python:3
+        command:
+        - python
+        - -u
+        - /script/sidecar.py
+        readinessProbe:
+          httpGet:
+            port: 8080
+        volumeMounts:
+        - mountPath: /script
+          name: sidecar
+      serviceAccountName: proa
+      shareProcessNamespace: true
+      terminationGracePeriodSeconds: 5
+      volumes:
+      - name: sidecar
+        configMap:
+          name: sidecar
+
+---
+
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: proa
+
+---
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: proa
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "watch", "list"]
+
+---
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: proa
+subjects:
+- kind: ServiceAccount
+  name: proa
+roleRef:
+  kind: Role
+  name: proa
+  apiGroup: rbac.authorization.k8s.io
