@@ -17,7 +17,7 @@
       in rec {
         # `nix build`
         packages = {
-          tenant-security-proxy = pkgs.rustPlatform.buildRustPackage {
+          proa = pkgs.rustPlatform.buildRustPackage {
             pname = "proa";
             version = "0.1.0";
             src = ./.;
