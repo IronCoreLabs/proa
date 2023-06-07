@@ -35,7 +35,7 @@ async fn send_shutdown_reqs(cli: Cli) {
 
 #[cfg(feature = "kill")]
 async fn send_shutdown_with_kill(cli: Cli) {
-    let do_nothing = cli.shutdown_http_get.is_empty()
+    let no_special_shutdown = cli.shutdown_http_get.is_empty()
         && cli.shutdown_http_post.is_empty()
         && cli.kill.is_empty();
 
@@ -44,7 +44,7 @@ async fn send_shutdown_with_kill(cli: Cli) {
     cli.kill.into_iter().for_each(kill::kill_by_name);
 
     // If given no explicit shutdown instructions, just kill everything.
-    if do_nothing {
+    if no_special_shutdown {
         kill::kill_all();
     }
 }
