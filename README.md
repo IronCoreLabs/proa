@@ -1,11 +1,17 @@
 # Proa for Kubernetes sidecar management
 
+[![](https://img.shields.io/crates/v/proa.svg)](https://crates.io/crates/proa)
+[![](https://docs.rs/proa/badge.svg)](https://docs.rs/proa)
+[![](https://github.com/IronCoreLabs/proa/workflows/CI/badge.svg)](https://github.com/IronCoreLabs/proa/actions)
+
 Inspired by https://github.com/redboxllc/scuttle, https://github.com/joho/godotenv, and
 https://github.com/kubernetes/enhancements/issues/753, among others.
 This program is meant to be the entrypoint for the "main" container in a Pod that also contains sidecar containers. Proa
 is a wrapper around the main process in the main container. It waits for the sidecars to be ready before starting the main program,
 and it shuts down the sidecars when the main process exits so the whole Pod can exit gracefully, as in the case of a
 [Job](https://kubernetes.io/docs/concepts/workloads/controllers/job/#handling-pod-and-container-failures).
+
+[Drawing of a proa](Proa.png)
 
 Briefly, it does this:
 
