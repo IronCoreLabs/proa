@@ -11,7 +11,7 @@ is a wrapper around the main process in the main container. It waits for the sid
 and it shuts down the sidecars when the main process exits so the whole Pod can exit gracefully, as in the case of a
 [Job](https://kubernetes.io/docs/concepts/workloads/controllers/job/#handling-pod-and-container-failures).
 
-![Drawing of a proa](Proa.png){ width=50%,height=50% }
+![Drawing of a proa](Proa.png)
 
 Briefly, it does this:
 
