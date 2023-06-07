@@ -17,14 +17,10 @@ async fn main() -> ExitCode {
     tracing_subscriber::fmt().json().init();
     info!("Starting up.");
 
-    let status = inner_main(cli).await;
-    let status = match status {
-        Ok(x) => x,
-        Err(error) => {
-            warn!(error = error.to_string());
-            1
-        }
-    };
+    let status = inner_main(cli).await.unwrap_or_else(|e| { 
+        warn!(error = error.to_string());
+        1
+    });
     info!(status, "Exiting.");
     status.into()
 }
