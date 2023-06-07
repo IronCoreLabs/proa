@@ -65,11 +65,12 @@ fn send_http_shutdowns(cli: &Cli, client: &Client) -> impl Future<Output = ()> {
     let msgs = cli
         .shutdown_http_get
         .iter()
-        .map(|url| send_http(client, url.clone(), Method::GET));
-    let msgs = msgs.chain(
-        cli.shutdown_http_post
-            .iter()
-            .map(|url| send_http(client, url.clone(), Method::POST)),
+        .map(|url| send_http(client, url.clone(), Method::GET))
+        .chain(
+            cli.shutdown_http_post
+                .iter()
+                .map(|url| send_http(client, url.clone(), Method::POST)
+        )
     );
     join_all(msgs).map(|_| ())
 }
