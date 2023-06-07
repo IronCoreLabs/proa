@@ -29,7 +29,7 @@ If it encounters errors during shutdown, it logs each error, but it exits with t
 - Sidecars need readinessProbes.
 - Service account needs permission to read and watch its own Pod.
 
-# Usage
+## Usage
 
 If you like, just copy [job.yaml](examples/job.yaml) and modify it for your use. The Job has a sidecar, simulated by a Python
 script, that must be ready before the main process starts. We simulate a sidecar that starts slowly by sleeping for 30 seconds
@@ -65,12 +65,12 @@ If you're sure you want to use this, compile the program with feature `kill`, an
     - all containers need to run as the same UID.
 - Don't use `hostPID`, or chaos will result as it tries to kill every process on the node.
 
-# Name
+## Name
 
 It's a program to manage sidecars, but sidecar is a motorcycle metaphor, and Kubernetes is all about nautical memes.
 A [proa](https://en.wikipedia.org/wiki/Proa) is a sailboat with an outrigger, which is sort of like a sidecar on a motorcycle.
 
-# Development
+## Development
 
 Requirements:
 - Use [nix](https://github.com/NixOS/nix) and [direnv](https://github.com/direnv/direnv), or install the tools manually. See
