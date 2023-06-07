@@ -2,7 +2,8 @@
 
 [![crates.io](https://img.shields.io/crates/v/proa.svg)](https://crates.io/crates/proa)
 [![docs.rs](https://docs.rs/proa/badge.svg)](https://docs.rs/proa)
-[![CI status](https://github.com/IronCoreLabs/proa/workflows/Rust CI/badge.svg)](https://github.com/IronCoreLabs/proa/actions)
+[![CI status](https://github.com/IronCoreLabs/proa/actions/workflows/rust-ci.yaml/badge.svg)](https://github.com/IronCoreLabs/proa/actions)
+[![Rust Report Card](https://rust-reportcard.xuri.me/badge/github.com/ironcorelabs/proa)](https://rust-reportcard.xuri.me/report/github.com/ironcorelabs/proa)
 
 Inspired by https://github.com/redboxllc/scuttle, https://github.com/joho/godotenv, and
 https://github.com/kubernetes/enhancements/issues/753, among others.
