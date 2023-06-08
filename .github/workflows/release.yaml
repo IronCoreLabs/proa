@@ -26,7 +26,7 @@ jobs:
         rust_target:
         - x86_64-unknown-linux-gnu
     steps:
-    - run: apt-get update && apt-get install build-essential libssl-dev
+    - run: sudo apt-get update && sudo apt-get install build-essential libssl-dev
     - uses: actions/checkout@v3
     - uses: IronCoreLabs/rust-toolchain@v1
       with:
