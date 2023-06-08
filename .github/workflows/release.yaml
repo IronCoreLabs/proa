@@ -1,0 +1,46 @@
+# apk add build-base openssl-dev openssl-libs-static
+# OPENSSL_STATIC=1
+# OPENSSL_LIB_DIR=/usr/lib
+# OPENSSL_INCLUDE_DIR=/usr/include/openssl
+# RUSTFLAGS='-C target-feature=+crt-static'
+# cargo build --release --target x86_64-unknown-linux-musl
+# Grab /src/target/x86_64-unknown-linux-musl/release/proa
+
+name: Release
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+'on':
+  release:
+    types:
+      - created
+  pull_request: null # TODO remove this.
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        rust_target:
+        - x86_64-unknown-linux-gnu
+    steps:
+    - run: apt-get update && apt-get install build-essential libssl-dev
+    - uses: actions/checkout@v3
+    - uses: IronCoreLabs/rust-toolchain@v1
+      with:
+        targets: ${{ matrix.rust_target }}
+    - uses: Swatinem/rust-cache@v2
+    - run: cargo build --release --target=${{ matrix.rust_target }}
+      env:
+        OPENSSL_STATIC: "1"
+        OPENSSL_LIB_DIR: /usr/lib
+        OPENSSL_INCLUDE_DIR: /usr/include/openssl
+        RUSTFLAGS: "-C target-feature=+crt-static"
+    - name: Upload release asset
+      run: |
+        mv target/${{ matrix.rust_target }}/release/proa proa-${{ matrix.rust_target }}
+        gh release upload ${{ github.event.release.tag_name }} proa-${{ matrix.rust_target }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
