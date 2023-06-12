@@ -3,7 +3,7 @@ use futures::{Stream, StreamExt, TryStreamExt};
 use k8s_openapi::api::core::v1::Pod;
 use kube::{
     runtime::{
-        watcher::{watcher, Config as KubeConfig},
+        watcher::{default_backoff, watch_object},
         WatchStreamExt,
     },
     ResourceExt,
@@ -30,9 +30,9 @@ pub async fn wait_for_ready() -> Result<Pod, Error> {
 }
 
 /// Return a stream providing Pod events about the pod we're running in.
-pub async fn watch_my_pod() -> Result<impl Stream<Item = Result<Pod, Error>>, Error> {
+pub async fn watch_my_pod() -> Result<impl Stream<Item = Result<Option<Pod>, Error>>, Error> {
     let client = Client::try_default().await?;
-    let pods: Api<Pod> = Api::default_namespaced(client);
+    let pods_api: Api<Pod> = Api::default_namespaced(client);
 
     // Our Pod name is the same as our hostname.
     let myname = gethostname::gethostname();
@@ -41,24 +41,26 @@ pub async fn watch_my_pod() -> Result<impl Stream<Item = Result<Pod, Error>>, Er
     let myname = myname.split('.').next().unwrap();
     info!(myname, "Watching for Pod");
 
-    let watch_config = format!("metadata.name={}", myname);
-    let watch_config = KubeConfig::default().fields(watch_config.as_str());
-
-    let pods = watcher(pods, watch_config).applied_objects();
-    let pods = pods.map_err(|e| anyhow!(e));
-    Ok(pods)
+    let pod = watch_object(pods_api, myname)
+        .backoff(default_backoff())
+        .map_err(|e| anyhow!(e));
+    Ok(pod)
 }
 
 /// If error, log it.
 /// If all the pod's containers but this one are ready, return the pod.
 /// Else return None.
-async fn filter_ready(pod: Result<Pod, Error>) -> Option<Pod> {
+async fn filter_ready(pod: Result<Option<Pod>, Error>) -> Option<Pod> {
     match pod {
         Err(e) => {
             info!("Watch error: {}", e);
             None
         }
-        Ok(p) => {
+        Ok(None) => {
+            debug!("Pod was deleted?");
+            None
+        }
+        Ok(Some(p)) => {
             debug!("Saw Pod {}...", p.name_any());
             is_ready(&p).map_or_else(
                 |e| {
@@ -126,7 +128,7 @@ mod tests {
             }
         };
         let pod: Pod = serde_json::from_str(pod.dump().as_str())?;
-        assert_eq!(filter_ready(Ok(pod.clone())).await, Some(pod));
+        assert_eq!(filter_ready(Ok(Some(pod.clone()))).await, Some(pod));
 
         // A pod with only the main container, which isn't ready.
         let pod = object! {
@@ -141,7 +143,7 @@ mod tests {
             }
         };
         let pod: Pod = serde_json::from_str(pod.dump().as_str())?;
-        assert_eq!(filter_ready(Ok(pod.clone())).await, Some(pod));
+        assert_eq!(filter_ready(Ok(Some(pod.clone()))).await, Some(pod));
 
         // A pod with one ready sidecar.
         let pod = object! {
@@ -162,7 +164,7 @@ mod tests {
             }
         };
         let pod: Pod = serde_json::from_str(pod.dump().as_str())?;
-        assert_eq!(filter_ready(Ok(pod.clone())).await, Some(pod));
+        assert_eq!(filter_ready(Ok(Some(pod.clone()))).await, Some(pod));
 
         // A pod with one not-ready sidecar.
         let pod = object! {
@@ -183,7 +185,7 @@ mod tests {
             }
         };
         let pod: Pod = serde_json::from_str(pod.dump().as_str())?;
-        assert_eq!(filter_ready(Ok(pod.clone())).await, None);
+        assert_eq!(filter_ready(Ok(Some(pod.clone()))).await, None);
 
         // A pod with one ready sidecar, one not-ready.
         let pod = object! {
@@ -206,7 +208,7 @@ mod tests {
             }
         };
         let pod: Pod = serde_json::from_str(pod.dump().as_str())?;
-        assert_eq!(filter_ready(Ok(pod.clone())).await, None);
+        assert_eq!(filter_ready(Ok(Some(pod.clone()))).await, None);
 
         // A pod with two ready sidecars.
         let pod = object! {
@@ -229,7 +231,7 @@ mod tests {
             }
         };
         let pod: Pod = serde_json::from_str(pod.dump().as_str())?;
-        assert_eq!(filter_ready(Ok(pod.clone())).await, Some(pod));
+        assert_eq!(filter_ready(Ok(Some(pod.clone()))).await, Some(pod));
 
         Ok(())
     }
