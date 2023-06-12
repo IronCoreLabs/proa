@@ -80,3 +80,10 @@ Requirements:
 1. `skaffold dev` to start the compile-build-deploy loop.
 
 Every time you save a file, skaffold will rebuild and redeploy, then show you output from the containers in the Pod.
+
+
+---
+
+## Sponsors
+
+This project sponsored by [IronCore Labs](https://ironcorelabs.com/), makers of data privacy and security solutions for cloud apps including [SaaS Shield](https://ironcorelabs.com/products/saas-shield/) for multi-tenant SaaS apps and [Cloaked Search](https://ironcorelabs.com/products/cloaked-search/) for data-in-use encryption over Elasticsearch and OpenSearch. 
