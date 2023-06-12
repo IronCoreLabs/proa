@@ -180,9 +180,12 @@ async fn wait_for_shutdown(pod: Pod) -> Result<(), Error> {
 /// (which we assume is this one), or when an error occurs.
 // We can't just use .status.phase, because that indicates the status of the entire Pod, and we're micro-managing based on statuses
 // of individual conatiners.
-async fn is_done(maybe_pod: Result<Pod, Error>) -> Option<Result<Pod, Error>> {
+async fn is_done(maybe_pod: Result<Option<Pod>, Error>) -> Option<Result<Pod, Error>> {
     match maybe_pod {
-        Ok(pod) => {
+        Ok(None) => Some(Err(anyhow::anyhow!(
+            "Pod was deleted before this process terminated."
+        ))),
+        Ok(Some(pod)) => {
             let (running, _) = pod_status(pod.clone());
             if running == Some(1) {
                 Some(Ok(pod))
@@ -195,13 +198,14 @@ async fn is_done(maybe_pod: Result<Pod, Error>) -> Option<Result<Pod, Error>> {
 }
 
 /// Emit a log message indicating the progress we've made toward shutting down the containers in this pod.
-fn log_progress(maybe_pod: &Result<Pod, Error>) {
+fn log_progress(maybe_pod: &Result<Option<Pod>, Error>) {
     fn fmt_or_unknown(n: Option<usize>) -> String {
         n.map_or("<unknown>".to_string(), |n| format!("{}", n))
     }
 
     match maybe_pod {
-        Ok(pod) => {
+        Ok(None) => warn!("Pod was deleted, but this process is still running."),
+        Ok(Some(pod)) => {
             let (running, total) = pod_status(pod.clone());
             let running = fmt_or_unknown(running);
             let total = fmt_or_unknown(total);
@@ -253,6 +257,12 @@ mod tests {
         let done = is_done(result).await;
         assert!(done.is_some());
 
+        // Our pod was deleted during shutdown. This shouldn't happen since this process is inside the pod; but handle it anyway
+        // by signaling done.
+        let result = Ok(None);
+        let done = is_done(result).await;
+        assert!(done.is_some());
+
         // A pod with one running container.
         let pod = object! {
             apiVersion: "v1",
@@ -266,7 +276,7 @@ mod tests {
             }
         };
         let pod: Pod = serde_json::from_str(pod.dump().as_str())?;
-        let result = Ok(pod);
+        let result = Ok(Some(pod));
         let done = is_done(result).await;
         assert!(done.is_some());
 
@@ -287,7 +297,7 @@ mod tests {
             }
         };
         let pod: Pod = serde_json::from_str(pod.dump().as_str())?;
-        let result = Ok(pod);
+        let result = Ok(Some(pod));
         let done = is_done(result).await;
         assert!(done.is_some());
 
@@ -308,7 +318,7 @@ mod tests {
             }
         };
         let pod: Pod = serde_json::from_str(pod.dump().as_str())?;
-        let result = Ok(pod);
+        let result = Ok(Some(pod));
         let done = is_done(result).await;
         assert!(done.is_none());
 
