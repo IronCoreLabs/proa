@@ -108,7 +108,7 @@ fn is_ready(pod: &Pod) -> WatchResult {
     let _enter = span.enter();
 
     // The name of the main container in the Pod. For now we pick containers[0].
-    let main_cont_name = match main_cont_name(&pod) {
+    let main_cont_name = match main_cont_name(pod) {
         Ok(name) => name,
         Err(e) => return WatchResult::ApiError(e),
     };
