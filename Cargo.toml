@@ -1,6 +1,6 @@
 [package]
 name = "proa"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["IronCore Labs <info@ironcorelabs.com>"]
 edition = "2021"
 description = "Manage Kubernetes sidecar container lifecycle."
