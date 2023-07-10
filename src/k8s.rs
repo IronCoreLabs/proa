@@ -25,7 +25,7 @@ pub async fn wait_for_ready() -> Result<Pod, Error> {
         .next()
         .await
         .ok_or(anyhow!("Pod was never ready"))?;
-    info!(err = ready_pod.is_err(), "Done waiting for Pod.");
+    info!(err = ?ready_pod.as_ref().err(), "Done waiting for Pod.");
     ready_pod
 }
 
