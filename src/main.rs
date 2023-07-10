@@ -18,11 +18,15 @@ async fn main() -> Result<ExitCode, Error> {
     tracing_subscriber::fmt().json().init();
     info!("Starting up.");
 
-    let pod = k8s::wait_for_ready().await?;
+    let wait_result = k8s::wait_for_ready().await;
 
-    let status = exec::run(&cli.command, &cli.args);
+    // If sidecar startup was successful, then keep a copy of our Pod for later, and also run the wrapped program.
+    let (maybe_pod, status) = match wait_result {
+        Ok(_) => (wait_result.ok(), exec::run(&cli.command, &cli.args)),
+        Err(e) => (None, Err(e)),
+    };
 
-    if let Err(err) = shutdown::shutdown(cli, pod).await {
+    if let Err(err) = shutdown::shutdown(cli, maybe_pod).await {
         warn!(err = err.to_string(), "Shutdown problem");
     }
 

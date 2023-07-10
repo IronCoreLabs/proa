@@ -13,14 +13,14 @@ use crate::k8s;
 use crate::stream::holistic_stream_ext::HolisticStreamExt;
 
 /// Shut down the sidecars and wait for them to terminate.
-pub async fn shutdown(cli: Cli, pod: Pod) -> Result<(), Error> {
+pub async fn shutdown(cli: Cli, maybe_pod: Option<Pod>) -> Result<(), Error> {
     let span = debug_span!("shutdown");
     let _enter = span.enter();
 
     info!("Sending shutdown requests.");
 
     send_shutdown_reqs(cli).await;
-    wait_for_shutdown(pod).await?;
+    wait_for_shutdown(maybe_pod).await?;
 
     Ok(())
 }
@@ -149,10 +149,11 @@ mod kill {
 
 /// Log messages as the containers shut down.
 /// If the timeout expires, give up and log a message.
-async fn wait_for_shutdown(pod: Pod) -> Result<(), Error> {
-    let timeout: Option<i64> = pod
-        .spec
-        .and_then(|spec| spec.termination_grace_period_seconds);
+async fn wait_for_shutdown(maybe_pod: Option<Pod>) -> Result<(), Error> {
+    let timeout: Option<i64> = maybe_pod.and_then(|pod| {
+        pod.spec
+            .and_then(|spec| spec.termination_grace_period_seconds)
+    });
     let timeout: u64 = match timeout {
         Some(x @ 0..) => x.try_into().unwrap(),
         _ => {
