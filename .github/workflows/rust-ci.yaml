@@ -1,15 +1,15 @@
 name: Rust CI
-'on':
+"on":
   push:
     branches:
-    - main
+      - main
   pull_request: null
   workflow_dispatch: null
   schedule:
-  - cron: 0 14 * * 1
+    - cron: 0 14 * * 1
 jobs:
   rust-ci:
-    uses: IronCoreLabs/workflows/.github/workflows/rust-ci.yaml@rust-ci-v0
+    uses: IronCoreLabs/workflows/.github/workflows/rust-ci.yaml@rust-ci-v2
     with:
       run_clippy: true
       minimum_coverage: "50"

@@ -3,7 +3,7 @@ use futures::{Stream, StreamExt, TryStreamExt};
 use k8s_openapi::api::core::v1::Pod;
 use kube::{
     runtime::{
-        watcher::{default_backoff, watch_object},
+        watcher::{watch_object, DefaultBackoff},
         WatchStreamExt,
     },
     ResourceExt,
@@ -42,7 +42,7 @@ pub async fn watch_my_pod() -> Result<impl Stream<Item = Result<Option<Pod>, Err
     info!(myname, "Watching for Pod");
 
     let pod = watch_object(pods_api, myname)
-        .backoff(default_backoff())
+        .backoff(DefaultBackoff::default())
         .map_err(|e| anyhow!(e));
     Ok(pod)
 }
@@ -163,7 +163,7 @@ fn main_cont_name(pod: &Pod) -> Result<String, Error> {
         .as_ref()
         .ok_or(anyhow!("No pod.spec"))?
         .containers
-        .get(0)
+        .first()
         .ok_or(anyhow!("No pod.spec.containers[0]"))?
         .name
         .clone())

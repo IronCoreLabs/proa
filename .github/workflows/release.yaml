@@ -5,10 +5,10 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-'on':
+"on":
   release:
     types:
-    - created
+      - created
 
 jobs:
   build:
@@ -16,23 +16,23 @@ jobs:
     strategy:
       matrix:
         rust_target:
-        - x86_64-unknown-linux-gnu
+          - x86_64-unknown-linux-gnu
     steps:
-    - run: sudo apt-get update && sudo apt-get install build-essential libssl-dev
-    - uses: actions/checkout@v3
-    - uses: IronCoreLabs/rust-toolchain@v1
-      with:
-        targets: ${{ matrix.rust_target }}
-    - uses: Swatinem/rust-cache@v2
-    - run: cargo build --release --target=${{ matrix.rust_target }}
-      env:
-        OPENSSL_STATIC: "1"
-        OPENSSL_LIB_DIR: /usr/lib/x86_64-linux-gnu
-        OPENSSL_INCLUDE_DIR: /usr/include/openssl
-        RUSTFLAGS: "-C target-feature=+crt-static"
-    - name: Upload release asset
-      run: |
-        mv target/${{ matrix.rust_target }}/release/proa proa-${{ matrix.rust_target }}
-        gh release upload ${{ github.event.release.tag_name }} proa-${{ matrix.rust_target }}
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - run: sudo apt-get update && sudo apt-get install build-essential libssl-dev
+      - uses: actions/checkout@v4
+      - uses: IronCoreLabs/rust-toolchain@v1
+        with:
+          targets: ${{ matrix.rust_target }}
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --release --target=${{ matrix.rust_target }}
+        env:
+          OPENSSL_STATIC: "1"
+          OPENSSL_LIB_DIR: /usr/lib/x86_64-linux-gnu
+          OPENSSL_INCLUDE_DIR: /usr/include/openssl
+          RUSTFLAGS: "-C target-feature=+crt-static"
+      - name: Upload release asset
+        run: |
+          mv target/${{ matrix.rust_target }}/release/proa proa-${{ matrix.rust_target }}
+          gh release upload ${{ github.event.release.tag_name }} proa-${{ matrix.rust_target }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

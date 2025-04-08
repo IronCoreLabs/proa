@@ -102,7 +102,7 @@ mod kill {
         unistd,
     };
     use std::ffi::{OsStr, OsString};
-    use sysinfo::{Pid, PidExt, Process, ProcessExt, System, SystemExt};
+    use sysinfo::{Pid, Process, ProcessesToUpdate, System};
     use tracing::{debug, info, trace};
 
     /// Send a TERM signal to every process that we can see, except our own.
@@ -110,10 +110,12 @@ mod kill {
     pub fn kill_all() {
         debug!("Killing all visible processes.");
         let mut sys = System::new();
-        sys.refresh_processes();
+        sys.refresh_processes(ProcessesToUpdate::All, true);
         sys.processes()
             .into_iter()
-            .filter(|&(_pid, process)| process.exe().file_name() != Some(OsStr::new("proa")))
+            .filter(|&(_pid, process)| {
+                process.exe().and_then(|e| e.file_name()) != Some(OsStr::new("proa"))
+            })
             .for_each(|(pid, proc)| kill_one(pid, proc));
     }
 
@@ -121,16 +123,16 @@ mod kill {
     pub fn kill_by_name(pname: OsString) {
         // It's inefficient to create and refresh sys each time this function is called.
         let mut sys = System::new();
-        sys.refresh_processes();
+        sys.refresh_processes(ProcessesToUpdate::All, true);
         sys.processes()
             .into_iter()
-            .filter(|&(_pid, process)| process.exe().file_name() == Some(&pname))
+            .filter(|&(_pid, process)| process.exe().and_then(|e| e.file_name()) == Some(&pname))
             .for_each(|(pid, proc)| kill_one(pid, proc));
     }
 
     /// Terminate one process by PID. Process is used for log messages.
     fn kill_one(pid: &Pid, process: &Process) {
-        trace!("Killing PID {} ({})", pid, process.name());
+        trace!("Killing PID {} ({})", pid, process.name().to_string_lossy());
         let pid = pid.as_u32();
         let pid = unistd::Pid::from_raw(pid.try_into().unwrap());
         signal::kill(pid, Signal::SIGTERM)
@@ -141,7 +143,7 @@ mod kill {
                     err = err.desc(),
                     "Unable to kill PID {} ({})",
                     pid,
-                    process.name()
+                    process.name().to_string_lossy()
                 );
             });
     }
