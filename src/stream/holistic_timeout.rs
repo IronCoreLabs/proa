@@ -1,5 +1,5 @@
 use futures::stream::Fuse;
-use futures::{ready, Future, Stream, StreamExt};
+use futures::{Future, Stream, StreamExt, ready};
 use pin_project::pin_project;
 use tokio::time::{Instant, Sleep};
 

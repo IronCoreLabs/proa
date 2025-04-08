@@ -1,14 +1,14 @@
-use anyhow::{anyhow, Error};
+use anyhow::{Error, anyhow};
 use futures::{Stream, StreamExt, TryStreamExt};
 use k8s_openapi::api::core::v1::Pod;
-use kube::{
-    runtime::{
-        watcher::{watch_object, DefaultBackoff},
-        WatchStreamExt,
-    },
-    ResourceExt,
-};
 use kube::{Api, Client};
+use kube::{
+    ResourceExt,
+    runtime::{
+        WatchStreamExt,
+        watcher::{DefaultBackoff, watch_object},
+    },
+};
 use tracing::{debug, debug_span, info};
 
 // Kubernetes-related functions.
